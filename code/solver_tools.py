@@ -1,8 +1,38 @@
-#!/usr/bin/env python
-# encoding: utf-8
+#!/usr/bin/env python3
+"""
+Helper routines used by Pagination solvers
+Copyright 2016, 2017 Aristide Grange, Imed Kacem, Sébastien Martin
 
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+"""Changelog
+
+Damian Yerrick, 2019-10
+    port to Python 3; add Pagination.decant() convenience method
+Aristide Grange, 2017-10
+    initial release at https://github.com/pagination-problem/pagination
+"""
 from fractions import Fraction as F
 from collections import Counter, OrderedDict
+from functools import reduce
 import json
 import itertools
 import re
@@ -11,7 +41,7 @@ import random
 def make_sort():
     def process(stuff):
         if isinstance(stuff, dict):
-            l = [(k, process(v)) for (k, v) in stuff.iteritems()]
+            l = [(k, process(v)) for (k, v) in stuff.items()]
             return OrderedDict(sorted(l))
         if isinstance(stuff, list):
             return [process(x) for x in stuff]
@@ -91,7 +121,7 @@ class Batch(list):
         self.weight = sum(len(tile) for tile in self)
         self.weightBySymbol = Counter(symbol for tile in self for symbol in tile)
         self.weightedCosts = [sum(F(1,self.weightBySymbol[symbol]) for symbol in tile) for tile in self]
-        self.actualEfficiencies = [1-weightedCost/tile.size for (tile,weightedCost) in itertools.izip(self,self.weightedCosts)]
+        self.actualEfficiencies = [1-weightedCost/tile.size for (tile,weightedCost) in zip(self,self.weightedCosts)]
         self.getConnectedComponents = self.calculateConnectedComponents
     
     def add(self,tile):
@@ -168,12 +198,12 @@ class Batch(list):
 
 class Pagination(list):
     
-    def __init__(self,capacity,algoName=None):
+    def __init__(self, capacity, algoName=None):
         self.capacity = capacity
         list.__init__(self,Batch(capacity=capacity))
-        if algoName is not None:
-            self.algoName = algoName
-            print "%s:" % algoName,
+        self.algoName = algoName
+        if algoName:
+            print("%s:" % algoName, end=" ")
     
     def newPage(self,stuff=None):
         """ Create a new page with a tile, a batch of tiles, or nothing at all (by default). """
@@ -197,7 +227,7 @@ class Pagination(list):
                 if self[targetIndex].costWith(self[sourceIndex]) <= self.capacity:
                     self[targetIndex] = Batch(self[targetIndex]+self[sourceIndex])
                     del self[sourceIndex]
-                    # print "d3",
+                    # print("d3", end=" ")
                 else:
                     sourceIndex += 1
             targetIndex += 1
@@ -209,7 +239,7 @@ class Pagination(list):
             while sourceIndex < len(self):
                 for cc in self[sourceIndex].getConnectedComponents():
                     if self[targetIndex].costWith(cc) <= self.capacity:
-                        # print "d2",
+                        # print("d2", end=" ")
                         for tile in cc:
                             self[targetIndex].add(tile)
                             self[sourceIndex].remove(tile)
@@ -226,7 +256,7 @@ class Pagination(list):
             while sourceIndex < len(self):
                 for tile in self[sourceIndex]:
                     if self[targetIndex].costWith(tile) <= self.capacity:
-                        # print "d1",
+                        # print("d1", end=" ")
                         self[targetIndex].add(tile)
                         self[sourceIndex].remove(tile)
                 if self[sourceIndex].isEmpty():
@@ -234,6 +264,12 @@ class Pagination(list):
                 else:
                     sourceIndex += 1
             targetIndex += 1
+
+    def decant(self):
+        """Try to improve a pagination by rearranging pages and tiles."""
+        self.decantPages()
+        self.decantConnectedComponents()
+        self.decantTiles()
     
     def moveTile(self,source,target,tile):
         target.add(tile)
@@ -259,7 +295,7 @@ class Pagination(list):
         for (pageIndex,page) in enumerate(self):
             if tile.hash in page.tileHashesSet:
                 return pageIndex
-        raise ValueError, "Tile %s not in pagination:\n%s" % (tile,self)
+        raise ValueError("Tile %s not in pagination:\n%s" % (tile,self))
     
     def getInfo(self,refTiles):
         indexForHashes = {hash(tuple(sorted(tile))):i for (i,tile) in enumerate(refTiles)}
@@ -294,4 +330,3 @@ class BatchesUpTo(Pagination):
     
     def suppressBatchesContainingTile(self,tile):
         self[:] = [batch for batch in self if tile not in batch] # modify in-place
-    
